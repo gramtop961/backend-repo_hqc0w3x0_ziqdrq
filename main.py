@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from bson import ObjectId
@@ -122,9 +122,21 @@ def dashboard():
 
 # CRUD helpers for collections
 @app.get("/products")
-def list_products():
-    items = [obj_to_dict(x) for x in get_documents("product")]
-    return items
+def list_products(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    q: Optional[str] = None,
+):
+    if db is None:
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
+    filt = {}
+    if q:
+        filt = {"$or": [{"sku": {"$regex": q, "$options": "i"}}, {"name": {"$regex": q, "$options": "i"}}]}
+    total = db["product"].count_documents(filt)
+    skip = (page - 1) * page_size
+    cursor = db["product"].find(filt).sort("_id", -1).skip(skip).limit(page_size)
+    items = [obj_to_dict(x) for x in cursor]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 class ProductUpdate(BaseModel):
     cost: Optional[float] = None
@@ -144,8 +156,29 @@ def update_product(sku: str, payload: ProductUpdate):
 
 # Operations: Receipts
 @app.get("/receipts")
-def receipts():
-    return [obj_to_dict(x) for x in get_documents("receipt")]
+def receipts(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    q: Optional[str] = None,
+    status: Optional[str] = None,
+):
+    if db is None:
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
+    filt = {}
+    if q:
+        filt["$or"] = [
+            {"reference": {"$regex": q, "$options": "i"}},
+            {"contact": {"$regex": q, "$options": "i"}},
+            {"from_location": {"$regex": q, "$options": "i"}},
+            {"to_location": {"$regex": q, "$options": "i"}},
+        ]
+    if status:
+        filt["status"] = status
+    total = db["receipt"].count_documents(filt)
+    skip = (page - 1) * page_size
+    cursor = db["receipt"].find(filt).sort("_id", -1).skip(skip).limit(page_size)
+    items = [obj_to_dict(x) for x in cursor]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 class ReceiptCreate(BaseModel):
     from_location: Optional[str] = None
@@ -195,8 +228,29 @@ def receipt_action(reference: str, payload: StatusPayload):
 
 # Operations: Delivery
 @app.get("/deliveries")
-def deliveries():
-    return [obj_to_dict(x) for x in get_documents("delivery")]
+def deliveries(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    q: Optional[str] = None,
+    status: Optional[str] = None,
+):
+    if db is None:
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
+    filt = {}
+    if q:
+        filt["$or"] = [
+            {"reference": {"$regex": q, "$options": "i"}},
+            {"contact": {"$regex": q, "$options": "i"}},
+            {"from_location": {"$regex": q, "$options": "i"}},
+            {"to_location": {"$regex": q, "$options": "i"}},
+        ]
+    if status:
+        filt["status"] = status
+    total = db["delivery"].count_documents(filt)
+    skip = (page - 1) * page_size
+    cursor = db["delivery"].find(filt).sort("_id", -1).skip(skip).limit(page_size)
+    items = [obj_to_dict(x) for x in cursor]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 class DeliveryCreate(BaseModel):
     to_location: Optional[str] = None
@@ -248,8 +302,32 @@ def delivery_action(reference: str, payload: StatusPayload):
 
 # Move history
 @app.get("/moves")
-def moves():
-    return [obj_to_dict(x) for x in get_documents("move")]
+def moves(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    q: Optional[str] = None,
+    sku: Optional[str] = None,
+    reference: Optional[str] = None,
+):
+    if db is None:
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
+    filt = {}
+    if q:
+        filt["$or"] = [
+            {"reference": {"$regex": q, "$options": "i"}},
+            {"contact": {"$regex": q, "$options": "i"}},
+            {"from_location": {"$regex": q, "$options": "i"}},
+            {"to_location": {"$regex": q, "$options": "i"}},
+        ]
+    if sku:
+        filt["product_sku"] = sku
+    if reference:
+        filt["reference"] = {"$regex": reference, "$options": "i"}
+    total = db["move"].count_documents(filt)
+    skip = (page - 1) * page_size
+    cursor = db["move"].find(filt).sort("_id", -1).skip(skip).limit(page_size)
+    items = [obj_to_dict(x) for x in cursor]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 # Settings
 @app.get("/warehouses")
